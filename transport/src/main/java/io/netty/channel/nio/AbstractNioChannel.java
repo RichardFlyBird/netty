@@ -35,10 +35,7 @@ import io.netty.util.internal.logging.InternalLoggerFactory;
 
 import java.io.IOException;
 import java.net.SocketAddress;
-import java.nio.channels.CancelledKeyException;
-import java.nio.channels.ClosedChannelException;
-import java.nio.channels.SelectableChannel;
-import java.nio.channels.SelectionKey;
+import java.nio.channels.*;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -378,6 +375,23 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         boolean selected = false;
         for (;;) {
             try {
+                /**
+                 * javaChannel() 起到封装作用，底层可以是tcp、udp等等，当为tcp时:
+                 *      1. javaChannel().register == ServerSocketChannel.open().register()
+                 *      2. 为何这里注册的感兴趣事件ops=0
+                 *          a. 为0时 只会存在java的事件集中，不会设置到 sys_epoll_ctl()中，相当于在这里只是初始化一下:用一个不会发生的事件作为 占位符；
+                 *          b. 然后在serverSocketChannel启动时，再更改为 0 -> accept事件，一言以蔽之："延迟设置" (个人觉得是 graceful start server)
+                 *      tips:
+                 *          a. java中的 ServerSocketChannel 就是面向 tcp协议(面向流的, stream-oriented)的 channel
+                 *          b. java中的DatagramChannel 则是面向udp协议(面向数据报的, datagram-oriented)的channel，
+                 *
+                 * 《在c语言中》:
+                 * socket的含义有可能是基于tcp的有可能是基于udp的，取决于 sock_create(int family, int type, int protocol, struct socket **res) 系统调用中的 type: 是tcp还是udp
+                 *      family：协议族（如 AF_INET 对应 IPv4，AF_INET6 对应 IPv6）。
+                 *      type：通信类型，决定是面向连接的（TCP）还是无连接的（UDP）：
+                 *            SOCK_STREAM：面向连接的字节流（默认对应 TCP）。
+                 *            SOCK_DGRAM：无连接的数据报（默认对应 UDP）。
+                 */
                 selectionKey = javaChannel().register(eventLoop().selector, 0, this);
                 return;
             } catch (CancelledKeyException e) {

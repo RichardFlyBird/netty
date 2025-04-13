@@ -30,6 +30,7 @@ public final class ThreadPerTaskExecutor implements Executor {
 
     @Override
     public void execute(Runnable command) {
+//        threadFactory 即: DefaultThreadFactory
         threadFactory.newThread(command).start();
     }
 }

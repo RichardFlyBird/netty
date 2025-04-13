@@ -863,6 +863,12 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
 
     private void doStartThread() {
         assert thread == null;
+        // 此处的 executor 是 EventLoopGroup 中的某个 EventLoop 绑定的 Executor，即child 线程，即: ThreadPerTaskExecutor。
+        // 是在 NioEventLoopGroup.newChild() 模版方法中回调创建的
+
+        // executor.execute():
+        //   1. 内部create 一个Thread a
+        //   2. 调用a.start() 启动线程
         executor.execute(new Runnable() {
             @Override
             public void run() {
@@ -874,6 +880,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
                 boolean success = false;
                 updateLastExecutionTime();
                 try {
+                    // 此处的run() 时 NioEventLoopGroup.newChild()方法返回的 NioEventLoop 对象中的run()方法
                     SingleThreadEventExecutor.this.run();
                     success = true;
                 } catch (Throwable t) {

@@ -82,6 +82,7 @@ public abstract class MultithreadEventLoopGroup extends MultithreadEventExecutor
 
     @Override
     public ChannelFuture register(Channel channel) {
+        // next() 轮训一个子的 SingleThreadEventLoop来执行 register()
         return next().register(channel);
     }
 

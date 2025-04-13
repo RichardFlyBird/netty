@@ -107,6 +107,7 @@ public class DefaultThreadFactory implements ThreadFactory {
     public Thread newThread(Runnable r) {
         Thread t = newThread(new DefaultRunnableDecorator(r), prefix + nextId.incrementAndGet());
         try {
+            // 按照用户自定义的 daemon 来修正是否需要设置成 守护线程
             if (t.isDaemon()) {
                 if (!daemon) {
                     t.setDaemon(false);

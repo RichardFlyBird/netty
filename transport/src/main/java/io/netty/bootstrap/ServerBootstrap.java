@@ -168,8 +168,11 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
 
         p.addLast(new ChannelInitializer<Channel>() {
             @Override
+            // 1. serverSocketChannel 中接受请求 (BossGroup中执行): initChannel在serverSocketChannel中接收到accept请求后执行，initChannel(Channel ch)中的ch即是得到的 socketChannel
+            // 2. 配置接收到的 SocketChannel (BossGroup中执行): 拿到socketChannel后 需要配置socketChannel的回调函数，让其后续继续有事情干。
+            // 3. 把 SocketChannel 丢到 workGroup中执行
             public void initChannel(Channel ch) throws Exception {
-                final ChannelPipeline pipeline = ch.pipeline();
+                final ChannelPipeline pipeline = ch.pipeline(); // ch 为socketChannel
                 ChannelHandler handler = config.handler();
                 if (handler != null) {
                     pipeline.addLast(handler);

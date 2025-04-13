@@ -43,6 +43,8 @@ public final class DefaultEventExecutorChooserFactory implements EventExecutorCh
         return (val & -val) == val;
     }
 
+//    PowerOfTowEventExecutorChooser 与 GenericEventExecutorChooser 功能算法一样，二者都是求与轮训
+//    只是当 executors size为2的n次方时，将 求与运算 转化成 位运算，加速计算而已
     private static final class PowerOfTowEventExecutorChooser implements EventExecutorChooser {
         private final AtomicInteger idx = new AtomicInteger();
         private final EventExecutor[] executors;

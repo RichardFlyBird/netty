@@ -470,8 +470,9 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
             if (eventLoop.inEventLoop()) {
                 register0(promise);
-            } else {
+            } else { // 第一次进来时 main线程执行的，肯定走该 else
                 try {
+                    // 将 IO操作 放入eventLoop 中执行，当前的 eventLoop 时eventLoopGroup中调用next()方法choose的其中一个 eventLoop, 也即 SingleThreadEventLoop
                     eventLoop.execute(new Runnable() {
                         @Override
                         public void run() {

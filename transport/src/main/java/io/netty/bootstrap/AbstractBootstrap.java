@@ -316,7 +316,9 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     final ChannelFuture initAndRegister() {
         Channel channel = null;
         try {
+            // 此处的 channel 为 ServerBootstrap门面类中设置的 NioServerSocketChannel
             channel = channelFactory.newChannel();
+            // 配置 serverSocketChannel 和 socketChannel 中的handler，即配置 serverSocketChannel 和 socketChannel 后续怎么玩
             init(channel);
         } catch (Throwable t) {
             if (channel != null) {
@@ -327,6 +329,17 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             return new DefaultChannelPromise(channel, GlobalEventExecutor.INSTANCE).setFailure(t);
         }
 
+        // main线程执行: bossGroup 注册 serverSocketChannel，为了不阻塞主线程，所以这里得到一个Future
+        // 且由于 bossGroup 是个组，大概率里面会用chooser.next()选择一个 executor 来执行 register 的操作。
+
+        // 换个表达1: == EventLoopGroup 中选择一个 EventLoop 来执行register 的操作
+        // 换个表达2: == EventExecutorGroup 中选择一个 EventExecutor 来执行 register 的操作
+        // 换个表达3: ==
+        // tip: BossGroup == NioEventLoopGroup == EventLoopGroup == EventExecutorGroup == MultithreadEventLoopGroup == MultithreadEventExecutorGroup
+        // tip:                                      EventLoop   ==     EventExecutor  ==   SingleThreadEventLoop   == SingleEventExecutor
+
+        // 总结: Netty中 Loop关键字 = Executor关键字，Loop 字面意思就是循环执行一个东西，而需要载体必然是 JDK的 Executor，即 Loop == Executor，
+        // Executor是Loop的具象化；或者可以理解 Loop是抽象，Executor是实现；Loop是接口，Executor是实现
         ChannelFuture regFuture = config().group().register(channel);
         if (regFuture.cause() != null) {
             if (channel.isRegistered()) {
