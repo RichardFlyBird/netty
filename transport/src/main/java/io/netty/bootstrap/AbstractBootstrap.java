@@ -278,6 +278,11 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     }
 
     private ChannelFuture doBind(final SocketAddress localAddress) {
+        /**
+         * initAndRegister(): 封装jdk的NIO的select、channel
+         *      1. 创建 serverSocketChannel
+         *      2. serverSocketChannel -> 注册到selector上。只不过中间加入了监听器、eventloop等细节
+         */
         final ChannelFuture regFuture = initAndRegister();
         final Channel channel = regFuture.channel();
         if (regFuture.cause() != null) {
