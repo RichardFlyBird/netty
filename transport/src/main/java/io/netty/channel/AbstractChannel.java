@@ -558,7 +558,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 closeIfClosed();
                 return;
             }
-
+            // 之前没绑定，现在绑定好了，说明是正常的绑定流程。不是重复绑定，则回调 fireChannelActive()
             if (!wasActive && isActive()) {
                 invokeLater(new Runnable() {
                     @Override

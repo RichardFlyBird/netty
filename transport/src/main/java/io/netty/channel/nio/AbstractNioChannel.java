@@ -42,6 +42,20 @@ import java.util.concurrent.TimeUnit;
 /**
  * Abstract base class for {@link Channel} implementations which use a Selector based approach.
  */
+
+/**
+ * AbstractNioChannel 的继承体系:
+ *   -----------------------------           --------------------------
+ *   | AbstractNioMessageChannel |           | AbstractNioByteChannel |
+ *   -----------------------------           --------------------------
+ *              ↑                                       ↑
+ *   --------------------------                -------------------
+ *   | NioServerSocketChannel |               | NioSocketChannel |
+ *   -------------------------                --------------------
+ *
+ *   Message: 会把server端接收到的client socket也当做消息，所以 AbstractNioMessageChannel 代表了server端。补充: 把socket抽象为 Message。
+ *   Byte: 客户端的Socket链接本质上就是 流(stream), 而stream就是 一个一个的byte，所以用 AbstractNioByteChannel 代表客户端
+ */
 public abstract class AbstractNioChannel extends AbstractChannel {
 
     private static final InternalLogger logger =
@@ -425,6 +439,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         readPending = true;
 
         final int interestOps = selectionKey.interestOps();
+        // 由于之前的操作: NioServerSocketChannel 注册到selector上的事件是0，所以这里会绑定真实的事件 readInterestOp
         if ((interestOps & readInterestOp) == 0) {
             selectionKey.interestOps(interestOps | readInterestOp);
         }

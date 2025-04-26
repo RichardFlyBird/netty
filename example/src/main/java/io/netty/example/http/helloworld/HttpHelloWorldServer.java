@@ -57,11 +57,14 @@ public final class HttpHelloWorldServer {
              .handler(new LoggingHandler(LogLevel.INFO))
              .childHandler(new HttpHelloWorldServerInitializer(sslCtx));
             // 从bind() 方法入手，分析整个server的启动流程
+            //     1. sync()等待bind() 异步完成，否则拿到未绑定完成的 serverSocketChannel 是无用的
             Channel ch = b.bind(PORT).sync().channel();
 
             System.err.println("Open your web browser and navigate to " +
                     (SSL? "https" : "http") + "://127.0.0.1:" + PORT + '/');
 
+            // ch.closeFuture().sync() 阻塞等待本线程(main线程)被唤醒
+            //     1. condition: 当上一步 b.bind(PORT).sync().channel() 得到的serverSocketChannel调用close()的时候会设置 closeFuture()的result，则会唤醒 main线程继续执行
             ch.closeFuture().sync();
         } finally {
             bossGroup.shutdownGracefully();
