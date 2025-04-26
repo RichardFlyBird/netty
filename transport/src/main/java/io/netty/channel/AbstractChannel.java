@@ -466,13 +466,16 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 return;
             }
 
+            // 《FD绑定到eventLoop上, 1:1关系》当前的channel，即fd 绑定到固定的 eventLoop 执行。避免fd来回转移到 不同的eventLoop执行，为什么呢？
+            // 一言以蔽之：保证线程安全。
+            // 否则多个线程操作一个socket，会有问题。写写有问题（需要加锁保证安全，降低了效率）。读读也会有问题（因为读数据时call OS系统调用把 socket的数据从OS的fd缓冲区 -> 读取到 pagecache中，对于pagecache而言是个写操作，是写操作就会加锁，影响性能）
             AbstractChannel.this.eventLoop = eventLoop;
 
             if (eventLoop.inEventLoop()) {
                 register0(promise);
             } else { // 第一次进来时 main线程执行的，肯定走该 else
                 try {
-                    // 将 IO操作 放入eventLoop 中执行，当前的 eventLoop 时eventLoopGroup中调用next()方法choose的其中一个 eventLoop, 也即 SingleThreadEventLoop
+                    // 将 IO操作 放入eventLoop 中执行，当前的 eventLoop 是eventLoopGroup中调用next()方法choose的其中一个 eventLoop, 也即 SingleThreadEventLoop
                     eventLoop.execute(new Runnable() {
                         @Override
                         public void run() {
@@ -504,15 +507,24 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
                 // Ensure we call handlerAdded(...) before we actually notify the promise. This is needed as the
                 // user may already fire events through the pipeline in the ChannelFutureListener.
-                pipeline.invokeHandlerAddedIfNeeded();
+                /**
+                 * pipeline 类的设计是: 监听者模式，这里是 register0()即注册serverSocketChannel时来触发 pipeline 中的一堆事件。
+                 * 即外部组件持有 pipeline 即可，组件中发生什么事件时，回调pipeline中提前设置好的一堆 listeners
+                 */
+                pipeline.invokeHandlerAddedIfNeeded(); // pipeline类的设计是: 监听者模式
 
-                safeSetSuccess(promise);
-                pipeline.fireChannelRegistered();
+                safeSetSuccess(promise); // 设置promise的结果, 并且回调promise中注册的listeners
+                pipeline.fireChannelRegistered(); // pipeline类的设计是: 监听者模式
                 // Only fire a channelActive if the channel has never been registered. This prevents firing
                 // multiple channel actives if the channel is deregistered and re-registered.
+                /**
+                 * serverSocketChannel 的active语义：javaChannel().socket().isBound(); 是否绑定号端口了
+                 * socketChannel的active 的语义：ch.isConnected(); 是否为建立好的连接，即是否是 serverSocket.accept()到的连接
+                 * 这里在捋 serverSocketChannel 的注册流程，所以还没绑定呢，即非激活状态
+                 */
                 if (isActive()) {
                     if (firstRegistration) {
-                        pipeline.fireChannelActive();
+                        pipeline.fireChannelActive(); // pipeline类的设计是: 监听者模式
                     } else if (config().isAutoRead()) {
                         // This channel was registered before and autoRead() is set. This means we need to begin read
                         // again so that we process inbound data.

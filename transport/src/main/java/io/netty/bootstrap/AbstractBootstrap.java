@@ -278,12 +278,25 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     }
 
     private ChannelFuture doBind(final SocketAddress localAddress) {
+        /**
+         * initAndRegister(): 封装jdk的NIO的select、channel
+         *      1. 创建 serverSocketChannel
+         *      2. serverSocketChannel -> 注册到selector上。只不过中间加入了监听器、eventloop等细节
+         */
         final ChannelFuture regFuture = initAndRegister();
         final Channel channel = regFuture.channel();
         if (regFuture.cause() != null) {
             return regFuture;
         }
 
+        /**
+         * 背景: 主线程在上面 把serverSocket -> register()到selector上任务交给 NIOEventLoop中的一个eventloop来做(每一个eventloop都对应一个线程)
+         * 下面主线程接着判断 regFuture.isDone() 是否完成:
+         *      1. 如果完成，则表明上一步eventLoop中的register任务完成了，则主线程直接执行 bind() 操作即可
+         *      2. 如果没有完成，则主线程也不用非得等待，直接把 bind() 像register()任务一样放进 eventLoop中执行即可。
+         *            -- 但此时 bind() 是作为一个 Listener放进去，等待register()完成后 再执行bind()
+         */
+        // 此处 regFuture即是 DefaultChannelPromise
         if (regFuture.isDone()) {
             // At this point we know that the registration was complete and successful.
             ChannelPromise promise = channel.newPromise();
