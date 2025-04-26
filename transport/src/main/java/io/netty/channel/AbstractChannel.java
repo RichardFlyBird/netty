@@ -575,7 +575,9 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 invokeLater(new Runnable() {
                     @Override
                     public void run() {
-                        pipeline.fireChannelActive(); // 这里
+                        // 这里回调 AbstractNioChannel.doBeginRead() 更正之前设定的 serverSocketChannel的 感兴趣事件集，
+                        // 即把之前 serverSocketChannel的注册到selector的 0，改成 真实的 readInterestOp (ACCEPT时事件)
+                        pipeline.fireChannelActive();
                     }
                 });
             }

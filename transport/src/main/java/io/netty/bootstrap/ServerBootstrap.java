@@ -166,11 +166,17 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
             currentChildAttrs = childAttrs.entrySet().toArray(newAttrArray(childAttrs.size()));
         }
 
+        /** 向 serverSocketChannel 的 DefaultChannelPipeline 中 添加一个回调,
+         *  则pipeline链路如下:
+         *
+         * before: Head -> Tail (空实现)
+         * after: Head -> ChannelInitializer -> Tail
+         *
+         * Tip: 该Pipeline是 serverSocketChannel 的pipeline，所以里面的回调函数都是对 serverSocketChannel 的操作
+         */
         p.addLast(new ChannelInitializer<Channel>() {
             @Override
-            // 1. serverSocketChannel 中接受请求 (BossGroup中执行): initChannel在serverSocketChannel中接收到accept请求后执行，initChannel(Channel ch)中的ch即是得到的 socketChannel
-            // 2. 配置接收到的 SocketChannel (BossGroup中执行): 拿到socketChannel后 需要配置socketChannel的回调函数，让其后续继续有事情干。
-            // 3. 把 SocketChannel 丢到 workGroup中执行
+            // 这里的 initChannel 是对之前创建的 NIOServerSocketChannel 进行初始化，initChannel(ch) 中ch是 NIOServerSocketChannel
             public void initChannel(Channel ch) throws Exception {
                 final ChannelPipeline pipeline = ch.pipeline(); // ch 为socketChannel
                 ChannelHandler handler = config.handler();
