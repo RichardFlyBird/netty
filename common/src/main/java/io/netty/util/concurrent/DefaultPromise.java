@@ -163,7 +163,7 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
         checkNotNull(listener, "listener");
 
         synchronized (this) {
-            addListener0(listener);
+            addListener0(listener); // 这里的 添加到listeners的操作 和 notifyListenersNow的唤醒 都是 synchronized (this)，即加同一个锁，即互斥的，即便线程安全的
         }
 
         if (isDone()) {
@@ -472,7 +472,7 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
 
     private void notifyListenersNow() {
         Object listeners;
-        synchronized (this) {
+        synchronized (this) { // 这里的唤醒 + 添加到listeners的操作都是 synchronized (this)，即加同一个锁，即互斥的，即便线程安全的
             // Only proceed if there are listeners to notify and we are not already notifying listeners.
             if (notifyingListeners || this.listeners == null) {
                 return;
