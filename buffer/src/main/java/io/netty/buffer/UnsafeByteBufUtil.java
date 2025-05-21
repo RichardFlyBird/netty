@@ -621,6 +621,11 @@ final class UnsafeByteBufUtil {
 
     static UnpooledUnsafeDirectByteBuf newUnsafeDirectByteBuf(
             ByteBufAllocator alloc, int initialCapacity, int maxCapacity) {
+        /**
+         * 应该是发现jdk不同版本实现不太一样，所以这里进行区分是有: Cleaner
+         *    1. 若没有cleaner: 则使用 long address = UNSAFE.allocateMemory()申请内存
+         *    2. 若有cleaner: 则直接使用jdk原生的 ByteBuffer.allocateDirect()
+         */
         if (PlatformDependent.useDirectBufferNoCleaner()) {
             return new UnpooledUnsafeNoCleanerDirectByteBuf(alloc, initialCapacity, maxCapacity);
         }

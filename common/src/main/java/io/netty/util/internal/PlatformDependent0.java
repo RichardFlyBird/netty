@@ -86,6 +86,7 @@ final class PlatformDependent0 {
                 // http://www.mail-archive.com/jdk6-dev@openjdk.java.net/msg00698.html
                 try {
                     if (unsafe != null) {
+                        // 再 check下unsafe种是否有 copyMemory 方法，后期可能依赖该方法做很多操作
                         unsafe.getClass().getDeclaredMethod(
                                 "copyMemory", Object.class, long.class, Object.class, long.class, long.class);
                         logger.debug("sun.misc.Unsafe.copyMemory: available");
@@ -118,11 +119,19 @@ final class PlatformDependent0 {
             Constructor<?> directBufferConstructor;
             long address = -1;
             try {
+                // 获取构造函数: DirectByteBuffer(long addr, int cap)
                 directBufferConstructor = direct.getClass().getDeclaredConstructor(long.class, int.class);
                 directBufferConstructor.setAccessible(true);
                 address = UNSAFE.allocateMemory(1);
 
                 // Try to use the constructor now
+                /**
+                 * 这里使用 构造函数 再次new一块堆外内存，看下是否可行。若成功，则代表 DirectByteBuffer类有构造函数: DirectByteBuffer(long addr, int cap)
+                 * tips: 这里之所以看下 构造函数DirectByteBuffer(long addr, int cap) 是否存在，是因为后续分配内存时直接使用:
+                 *       1. long address = UNSAFE.allocateMemory(1);
+                 *       2. DirectByteBuffer dbb = directBufferConstructor.newInstance(address, 1);
+                 *       这样直接可以获取c堆地址: address。若使用 ByteBuffer.allocateDirect(size) 则想获取address时，还需要反射 得到的DirectByteBuffer对象获取address，有点麻烦。
+                 */
                 directBufferConstructor.newInstance(address, 1);
             } catch (Throwable t) {
                 directBufferConstructor = null;

@@ -64,6 +64,8 @@ public class UnpooledDirectByteBuf extends AbstractReferenceCountedByteBuf {
         }
 
         this.alloc = alloc;
+        // 没有unsafe的时候 直接使用jdk的接口来申请c堆内存: ByteBuffer.allocateDirect，
+        //  当然有可能底层也使用了unsafe类，只不过是jdk内部可以使用的unsafe，而没有暴露给外部而已。
         setByteBuffer(ByteBuffer.allocateDirect(initialCapacity));
     }
 
