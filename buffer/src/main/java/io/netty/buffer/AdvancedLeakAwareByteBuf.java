@@ -950,6 +950,7 @@ final class AdvancedLeakAwareByteBuf extends WrappedByteBuf {
     public boolean release() {
         boolean deallocated = super.release();
         if (deallocated) {
+            // 如果release成功，则设置监视对象(虚引用)的 释放标志位 freed=true，并且从全局head链表中 移除 虚引用对象，表示该虚引用对象也可以被gc了。
             leak.close();
         } else {
             leak.record();

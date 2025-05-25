@@ -224,6 +224,7 @@ public class ResourceLeakDetector<T> {
         }
 
         if (level.ordinal() < Level.PARANOID.ordinal()) {
+            // 抽样是否 生成内存泄露检测的对象: mask =128 - 1, 尾数都是1, 与 leakCheckCnt相与即可得到求余的结果，作为随机数
             if ((leakCheckCnt ++ & mask) == 0) {
                 reportLeak(level);
                 return new DefaultResourceLeak(obj);
@@ -237,6 +238,7 @@ public class ResourceLeakDetector<T> {
     }
 
     private void reportLeak(Level level) {
+        // 日志不可用，则gg了，无法打印内存泄露的信息，则直接return
         if (!logger.isErrorEnabled()) {
             for (;;) {
                 @SuppressWarnings("unchecked")
@@ -256,6 +258,12 @@ public class ResourceLeakDetector<T> {
         }
 
         // Detect and report previous leaks.
+        /**
+         * 每次new 新的DefaultResourceLeak对象  监视新的 buf对象之前，for循环 queue中所有需要处理的监视对象 (虚引用对象)，看下是否引用的对象内存被释放了
+         *      类比:
+         *          1. redis 读时 删除过期数据
+         *          2. linux分配虚拟内存，只有当虚拟内存被access时，才会触发 page fault，进入linux中断函数分配真实的物理page
+         */
         for (;;) {
             @SuppressWarnings("unchecked")
             DefaultResourceLeak ref = (DefaultResourceLeak) refQueue.poll();
@@ -263,12 +271,16 @@ public class ResourceLeakDetector<T> {
                 break;
             }
 
-            ref.clear();
+            ref.clear(); // 这一步没必要，可以删除。因为只有gc之后，ref.referent=null之后，ref 对象才会被放入refQueue.poll()。所以在合理没必要再次置空，除非jvm有bug
 
+            // 若之前已经正常release buf内存了，则之前就会调用 ref.close()方法
+            // 所以正常情况(即buf已经被release过了)的话: 这里再调用ref.close()等于false，则直接continue了
             if (!ref.close()) {
                 continue;
             }
 
+            // 若代码走到这里，则说明 freed 标志位不为true，即发生 内存泄露，需要上报了
+            // ref.toString() 会把属性 lastRecords上记录的堆栈 转化成字符串打印到log中
             String records = ref.toString();
             if (reportedLeaks.putIfAbsent(records, Boolean.TRUE) == null) {
                 if (records.isEmpty()) {
@@ -315,6 +327,7 @@ public class ResourceLeakDetector<T> {
     }
 
     private final class DefaultResourceLeak extends PhantomReference<Object> implements ResourceLeak {
+        // 记录内存的创建堆栈，方便排错。只有 level=ADVANCED / PARANOID才会记录内存的创建堆栈。其他如 SIMPLE 不会记录。
         private final String creationRecord;
         private final Deque<String> lastRecords = new ArrayDeque<String>();
         private final AtomicBoolean freed;
@@ -327,6 +340,7 @@ public class ResourceLeakDetector<T> {
 
             if (referent != null) {
                 Level level = getLevel();
+                // 只有 ADVANCED/PARANOID才会记录内存的创建堆栈。其他 SIMPLE 不会
                 if (level.ordinal() >= Level.ADVANCED.ordinal()) {
                     creationRecord = newRecord(null, 3);
                 } else {
@@ -334,6 +348,10 @@ public class ResourceLeakDetector<T> {
                 }
 
                 // TODO: Use CAS to update the list.
+                /** head 是 static final ResourceLeakDetector<ByteBuf> leakDetector 对象中的属性
+                 *      1. 全局leakDetector是GC root，永远不会被GC，所以head也永远不会被GC
+                 *      2. 把 新的 DefaultResourceLeak 对象挂载head链表上，即 新的 DefaultResourceLeak 对象被强引用了，也永远不会被回收(为了监视 referent而存在，若没了，就没法监视了)，除非被人手动移除链表。
+                 */
                 synchronized (head) {
                     prev = head;
                     next = head.next;
@@ -343,6 +361,7 @@ public class ResourceLeakDetector<T> {
                 }
                 freed = new AtomicBoolean();
             } else {
+                // 若为 空引用对象，则什么都不做，相当于free过了，所以设置freed=true即可，
                 creationRecord = null;
                 freed = new AtomicBoolean(true);
             }
@@ -460,6 +479,8 @@ public class ResourceLeakDetector<T> {
         }
 
         // Append the stack trace.
+        // 通过 Throwable()可以获得运行时: 当前代码行的调用堆栈，记录下来。
+        // 即从哪里分配的当前对象，后期检测到内存泄露需要报告的时候，直接把这个堆栈打印出来，方便用户排查问题
         StackTraceElement[] array = new Throwable().getStackTrace();
         for (StackTraceElement e: array) {
             if (recordsToSkip > 0) {

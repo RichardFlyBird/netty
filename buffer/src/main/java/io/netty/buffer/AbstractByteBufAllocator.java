@@ -34,6 +34,8 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
             case SIMPLE:
                 leak = AbstractByteBuf.leakDetector.open(buf);
                 if (leak != null) {
+                    // 把 leak (监视bytebuf内存泄露，一个buf对象对应一个leak对象，1:1的关系) 和 buf 封装到一个SimpleLeakAwareByteBuf中，作为一个装饰者对象。
+                    // 表达式：原始netty的buf + （增强的功能leak + 内部一些逻辑增强） = 装饰者对象 SimpleLeakAwareByteBuf, 但很遗憾，SimpleLeakAwareByteBuf仅仅只是有个属性 leak，并没有记录堆栈。
                     buf = new SimpleLeakAwareByteBuf(buf, leak);
                 }
                 break;
@@ -41,6 +43,7 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
             case PARANOID:
                 leak = AbstractByteBuf.leakDetector.open(buf);
                 if (leak != null) {
+                    // 装饰者，任何操作都：记录堆栈。但是回导致性能低
                     buf = new AdvancedLeakAwareByteBuf(buf, leak);
                 }
                 break;
