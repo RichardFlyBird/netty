@@ -68,6 +68,7 @@ final class PoolThreadCache {
     // TODO: Test if adding padding helps under contention
     //private long pad0, pad1, pad2, pad3, pad4, pad5, pad6, pad7;
 
+    // 该对象: 每个线程有一个
     PoolThreadCache(PoolArena<byte[]> heapArena, PoolArena<ByteBuffer> directArena,
                     int tinyCacheSize, int smallCacheSize, int normalCacheSize,
                     int maxCachedBufferCapacity, int freeSweepAllocationThreshold) {
@@ -102,11 +103,20 @@ final class PoolThreadCache {
         }
         if (heapArena != null) {
             // Create the caches for the heap allocations
+            // tinyCacheSize = 512
+            // numTinySubpagePools = 32, 数组长度
+            // 从伙伴算法 树中拿出一个节点 8kb，做等份切割，形成了slab算法
             tinySubPageHeapCaches = createSubPageCaches(
                     tinyCacheSize, PoolArena.numTinySubpagePools, SizeClass.Tiny);
+            // smallCacheSize = 256
+            // numSmallSubpagePools = 13-9 = 4, 数组长度
+            // 从伙伴算法 树中拿出一个节点 8kb，做等份切割，形成了slab算法
             smallSubPageHeapCaches = createSubPageCaches(
                     smallCacheSize, heapArena.numSmallSubpagePools, SizeClass.Small);
 
+            // normalCacheSize = 64
+            // maxCachedBufferCapacity = 32 * 1024
+            // 从伙伴算法 树中拿出一个节点 8kb，不做任何切割，直接缓存
             numShiftsNormalHeap = log2(heapArena.pageSize);
             normalHeapCaches = createNormalCaches(
                     normalCacheSize, maxCachedBufferCapacity, heapArena);
@@ -142,9 +152,12 @@ final class PoolThreadCache {
 
     private static <T> MemoryRegionCache<T>[] createNormalCaches(
             int cacheSize, int maxCachedBufferCapacity, PoolArena<T> area) {
+        // 64
         if (cacheSize > 0) {
+            // area.chunkSize = 16MB, maxCachedBufferCapacity = 32 * 1024 = 32KB
+            // 所以 max = 32kb
             int max = Math.min(area.chunkSize, maxCachedBufferCapacity);
-            int arraySize = Math.max(1, log2(max / area.pageSize) + 1);
+            int arraySize = Math.max(1, log2(max / area.pageSize) + 1); // arraySize = 3, 即下面cache数组长度=3, 且每个cache中有一个queue，长度为64
 
             @SuppressWarnings("unchecked")
             MemoryRegionCache<T>[] cache = new MemoryRegionCache[arraySize];
@@ -370,6 +383,7 @@ final class PoolThreadCache {
 
         MemoryRegionCache(int size, SizeClass sizeClass) {
             this.size = MathUtil.findNextPositivePowerOfTwo(size);
+            // Mpsc: multiple producer, single consumer，多线程同时还回去 内存，但是同时只有一个线程获取
             queue = PlatformDependent.newFixedMpscQueue(this.size);
             this.sizeClass = sizeClass;
         }
