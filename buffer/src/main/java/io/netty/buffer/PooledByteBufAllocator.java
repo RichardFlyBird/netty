@@ -142,6 +142,15 @@ public class PooledByteBufAllocator extends AbstractByteBufAllocator {
     }
 
     public PooledByteBufAllocator(boolean preferDirect) {
+        /**
+         * preferDirect: 默认 true
+         * DEFAULT_NUM_HEAP_ARENA: 默认 cpu个数 * 2 （每隔cpu使用一个poolArea，避免产生竞争）
+         * DEFAULT_NUM_DIRECT_ARENA: 默认 cpu个数 * 2（每隔cpu使用一个poolArea，避免产生竞争）
+         *
+         * 减少外碎片（伙伴算法）参数:
+         * DEFAULT_PAGE_SIZE: 默认 8192，即伙伴算法中 一个树的每隔叶子结点 的大小: 8kb
+         * DEFAULT_MAX_ORDER: 默认 11. 则伙伴算法树 顶层根节点内存大小: 8192 << 11 = 16M
+         */
         this(preferDirect, DEFAULT_NUM_HEAP_ARENA, DEFAULT_NUM_DIRECT_ARENA, DEFAULT_PAGE_SIZE, DEFAULT_MAX_ORDER);
     }
 
@@ -151,9 +160,15 @@ public class PooledByteBufAllocator extends AbstractByteBufAllocator {
 
     public PooledByteBufAllocator(boolean preferDirect, int nHeapArena, int nDirectArena, int pageSize, int maxOrder) {
         this(preferDirect, nHeapArena, nDirectArena, pageSize, maxOrder,
+                // 512                          256                         64
                 DEFAULT_TINY_CACHE_SIZE, DEFAULT_SMALL_CACHE_SIZE, DEFAULT_NORMAL_CACHE_SIZE);
     }
 
+    // maxOrder: 树高, 默认 11
+    // pageShifts: 默认 13
+    // tinyCacheSize: 512
+    // smallCacheSize: 256
+    // normalCacheSize: 64
     public PooledByteBufAllocator(boolean preferDirect, int nHeapArena, int nDirectArena, int pageSize, int maxOrder,
                                   int tinyCacheSize, int smallCacheSize, int normalCacheSize) {
         super(preferDirect);
@@ -161,6 +176,7 @@ public class PooledByteBufAllocator extends AbstractByteBufAllocator {
         this.tinyCacheSize = tinyCacheSize;
         this.smallCacheSize = smallCacheSize;
         this.normalCacheSize = normalCacheSize;
+        // chunkSize = pageSize左移树高maxOrder = 8kb << 11 = 16M
         final int chunkSize = validateAndCalculateChunkSize(pageSize, maxOrder);
 
         if (nHeapArena < 0) {
@@ -175,7 +191,7 @@ public class PooledByteBufAllocator extends AbstractByteBufAllocator {
         if (nHeapArena > 0) {
             heapArenas = newArenaArray(nHeapArena);
             List<PoolArenaMetric> metrics = new ArrayList<PoolArenaMetric>(heapArenas.length);
-            for (int i = 0; i < heapArenas.length; i ++) {
+            for (int i = 0; i < heapArenas.length; i++) {
                 PoolArena.HeapArena arena = new PoolArena.HeapArena(this, pageSize, maxOrder, pageShifts, chunkSize);
                 heapArenas[i] = arena;
                 metrics.add(arena);
@@ -189,7 +205,7 @@ public class PooledByteBufAllocator extends AbstractByteBufAllocator {
         if (nDirectArena > 0) {
             directArenas = newArenaArray(nDirectArena);
             List<PoolArenaMetric> metrics = new ArrayList<PoolArenaMetric>(directArenas.length);
-            for (int i = 0; i < directArenas.length; i ++) {
+            for (int i = 0; i < directArenas.length; i++) {
                 PoolArena.DirectArena arena = new PoolArena.DirectArena(
                         this, pageSize, maxOrder, pageShifts, chunkSize);
                 directArenas[i] = arena;
@@ -217,6 +233,7 @@ public class PooledByteBufAllocator extends AbstractByteBufAllocator {
         }
 
         // Logarithm base 2. At this point we know that pageSize is a power of two.
+        // pageSize 8kb = 10 0000 0000 0000, 此处计算2的多少次方等于 8kb. 即: 13
         return Integer.SIZE - 1 - Integer.numberOfLeadingZeros(pageSize);
     }
 
@@ -227,7 +244,7 @@ public class PooledByteBufAllocator extends AbstractByteBufAllocator {
 
         // Ensure the resulting chunkSize does not overflow.
         int chunkSize = pageSize;
-        for (int i = maxOrder; i > 0; i --) {
+        for (int i = maxOrder; i > 0; i--) {
             if (chunkSize > MAX_CHUNK_SIZE / 2) {
                 throw new IllegalArgumentException(String.format(
                         "pageSize (%d) << maxOrder (%d) must not exceed %d", pageSize, maxOrder, MAX_CHUNK_SIZE));
@@ -272,14 +289,14 @@ public class PooledByteBufAllocator extends AbstractByteBufAllocator {
     }
 
     /**
-     *  Default number of heap areanas - System Property: io.netty.allocator.numHeapArenas - default 2 * cores
+     * Default number of heap areanas - System Property: io.netty.allocator.numHeapArenas - default 2 * cores
      */
     public static int defaultNumHeapArena() {
         return DEFAULT_NUM_HEAP_ARENA;
     }
 
     /**
-     *  Default numer of direct arenas - System Property: io.netty.allocator.numDirectArenas - default 2 * cores
+     * Default numer of direct arenas - System Property: io.netty.allocator.numDirectArenas - default 2 * cores
      */
     public static int defaultNumDirectArena() {
         return DEFAULT_NUM_DIRECT_ARENA;
@@ -293,28 +310,28 @@ public class PooledByteBufAllocator extends AbstractByteBufAllocator {
     }
 
     /**
-     *  Default maximum order - System Property: io.netty.allocator.maxOrder - default 11
+     * Default maximum order - System Property: io.netty.allocator.maxOrder - default 11
      */
     public static int defaultMaxOrder() {
         return DEFAULT_MAX_ORDER;
     }
 
     /**
-     *  Default tiny cache size - System Property: io.netty.allocator.tinyCacheSize - default 512
+     * Default tiny cache size - System Property: io.netty.allocator.tinyCacheSize - default 512
      */
     public static int defaultTinyCacheSize() {
         return DEFAULT_TINY_CACHE_SIZE;
     }
 
     /**
-     *  Default small cache size - System Property: io.netty.allocator.smallCacheSize - default 256
+     * Default small cache size - System Property: io.netty.allocator.smallCacheSize - default 256
      */
     public static int defaultSmallCacheSize() {
         return DEFAULT_SMALL_CACHE_SIZE;
     }
 
     /**
-     *  Default normal cache size - System Property: io.netty.allocator.normalCacheSize - default 64
+     * Default normal cache size - System Property: io.netty.allocator.normalCacheSize - default 64
      */
     public static int defaultNormalCacheSize() {
         return DEFAULT_NORMAL_CACHE_SIZE;
@@ -457,7 +474,7 @@ public class PooledByteBufAllocator extends AbstractByteBufAllocator {
                 .append(" heap arena(s):")
                 .append(StringUtil.NEWLINE);
         if (heapArenasLen > 0) {
-            for (PoolArena<byte[]> a: heapArenas) {
+            for (PoolArena<byte[]> a : heapArenas) {
                 buf.append(a);
             }
         }
@@ -465,10 +482,10 @@ public class PooledByteBufAllocator extends AbstractByteBufAllocator {
         int directArenasLen = directArenas == null ? 0 : directArenas.length;
 
         buf.append(directArenasLen)
-           .append(" direct arena(s):")
-           .append(StringUtil.NEWLINE);
+                .append(" direct arena(s):")
+                .append(StringUtil.NEWLINE);
         if (directArenasLen > 0) {
-            for (PoolArena<ByteBuffer> a: directArenas) {
+            for (PoolArena<ByteBuffer> a : directArenas) {
                 buf.append(a);
             }
         }

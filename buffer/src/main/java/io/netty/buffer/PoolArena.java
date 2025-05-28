@@ -87,17 +87,22 @@ abstract class PoolArena<T> implements PoolArenaMetric {
         this.pageShifts = pageShifts;
         this.chunkSize = chunkSize;
         subpageOverflowMask = ~(pageSize - 1);
-        tinySubpagePools = newSubpagePoolArray(numTinySubpagePools);
+        tinySubpagePools = newSubpagePoolArray(numTinySubpagePools);  // 默认 numTinySubpagePools = 32
         for (int i = 0; i < tinySubpagePools.length; i ++) {
             tinySubpagePools[i] = newSubpagePoolHead(pageSize);
         }
 
         numSmallSubpagePools = pageShifts - 9;
-        smallSubpagePools = newSubpagePoolArray(numSmallSubpagePools);
+        smallSubpagePools = newSubpagePoolArray(numSmallSubpagePools); // 默认 numSmallSubpagePools = 13 -9 = 4
         for (int i = 0; i < smallSubpagePools.length; i ++) {
             smallSubpagePools[i] = newSubpagePoolHead(pageSize);
         }
 
+        /**
+         * 双向链表:
+         *     qInit -> q000 -> q025 -> q075 -> q100
+         *     qInit    q000 <- q025 <- q075 <- q100
+         */
         q100 = new PoolChunkList<T>(null, 100, Integer.MAX_VALUE, chunkSize);
         q075 = new PoolChunkList<T>(q100, 75, 100, chunkSize);
         q050 = new PoolChunkList<T>(q075, 50, 100, chunkSize);
