@@ -361,6 +361,8 @@ public class PooledByteBufAllocator extends AbstractByteBufAllocator {
 
     final class PoolThreadLocalCache extends FastThreadLocal<PoolThreadCache> {
 
+        // 多线程都可能执行 同一个对象PoolThreadLocalCache的 initialValue方法，会有竞争关系
+        // 所以加锁，保证从heapArenas中拿到的 PoolArena 是不会重复的，即线程安全的
         @Override
         protected synchronized PoolThreadCache initialValue() {
             final PoolArena<byte[]> heapArena = leastUsedArena(heapArenas);

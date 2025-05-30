@@ -150,8 +150,10 @@ abstract class PoolArena<T> implements PoolArenaMetric {
     abstract boolean isDirect();
 
     PooledByteBuf<T> allocate(PoolThreadCache cache, int reqCapacity, int maxCapacity) {
+        // 想从pooled byte buf中申请一块内存之前，需要先有个承载结构，即先 newByteBuf()得到承载体
+        // 而这个承载体在业务上 必然是经常创建的，所以使用对象池: RECYCLER
         PooledByteBuf<T> buf = newByteBuf(maxCapacity);
-        allocate(cache, buf, reqCapacity);
+        allocate(cache, buf, reqCapacity); // 从cache中取出一块内存 填充进 buf中，至于怎么填充: 伙伴算法 + slab算法
         return buf;
     }
 
@@ -179,8 +181,18 @@ abstract class PoolArena<T> implements PoolArenaMetric {
         return (normCapacity & 0xFFFFFE00) == 0;
     }
 
+    /**
+     * 《allocate 流程如下》
+     * 1. isTinyOrSmall(): 算小页，即小于伙伴算法的一个节点页面大小，即小于 8kb. 则使用slab算法取出 8kb 内部均分后的某一个区域
+     *                  [0, 512]: tiny
+     *                  [512, 8kb]: small
+     * 2. < chunkSize: 算是正常页，即属于[8KB, 16MB]，则从伙伴算法 取出多个 8kb的节点即可
+     * 3. > chunkSize: 则算大页，则直接从内存中申请，且不缓存。
+     *                  若是heap: 则直接 new byte[]数组；
+     *                  若是direct：则直接申请c堆内存
+     */
     private void allocate(PoolThreadCache cache, PooledByteBuf<T> buf, final int reqCapacity) {
-        final int normCapacity = normalizeCapacity(reqCapacity);
+        final int normCapacity = normalizeCapacity(reqCapacity); // 归一化到2的倍数
         if (isTinyOrSmall(normCapacity)) { // capacity < pageSize
             int tableIdx;
             PoolSubpage<T>[] table;
