@@ -102,6 +102,14 @@ abstract class PoolArena<T> implements PoolArenaMetric {
          * 双向链表:
          *     qInit -> q000 -> q025 -> q075 -> q100
          *     qInit    q000 <- q025 <- q075 <- q100
+         * PoolChunkList 里面管理PoolChunk，每个PoolChunk是16MB
+         *      1. 16MB形成一棵树，其中每个非根节点是8KB
+         *             a. 8KB不做内部切分的，叫做normal
+         *             b. 8KB中做切分的, 又划分为 tidy区域/small区域
+         *                  i: tidy区域: [16byte ~ 512-16byte], 其中每隔16byte一个格子，是等差数列的数组。用户申请的内存会被 后端对齐到16byte的整数倍，然后按照划分好的给客户端
+         *                 ii: small区域: [512byte ~ 1kb), [1kb ~ 2kb), [2kb ~ 4kb), [4kb ~ 8kb) 四个区域，形成等比数列的数组。如当申请内存为700byte, 则将 [512byte ~ 1kb) 内存区域给到客户端；当申请内存为3kb, 则将 [2kb ~ 4kb) 给到客户端；
+         * 如果PoolChunk的使用率达到25%, 50%等不同级别，则会把PoolChunk从某个PoolChunkList -> 另外一个PoolChunkList中。那为什么 q100, q075, q025... 等有重叠?
+         *      1. 为了防止PoolChunk在某个边界来回抖动，所以预留重叠区域
          */
         q100 = new PoolChunkList<T>(null, 100, Integer.MAX_VALUE, chunkSize);
         q075 = new PoolChunkList<T>(q100, 75, 100, chunkSize);
@@ -148,7 +156,7 @@ abstract class PoolArena<T> implements PoolArenaMetric {
     }
 
     static int tinyIdx(int normCapacity) {
-        return normCapacity >>> 4;
+        return normCapacity >>> 4; // 为什么右移4位，即除以16. 因为tidy类型的都是以16byte为单位的等差数列，为什么是16byte呢？因为java 中一个空的Object对象在64位机中占用16byte(在不考虑指针压缩的情况下，是8byte oop头 + 8byte 指向klass的指针)
     }
 
     static int smallIdx(int normCapacity) {
@@ -325,10 +333,14 @@ abstract class PoolArena<T> implements PoolArenaMetric {
         if (reqCapacity < 0) {
             throw new IllegalArgumentException("capacity: " + reqCapacity + " (expected: 0+)");
         }
+        // 大于16MB，则直接返回
         if (reqCapacity >= chunkSize) {
             return reqCapacity;
         }
 
+        // 上面将大于16MB的case排除了。则下面有三种可能: tidy, small, normal
+        // 目的: 将reqCapacity向上对齐到2的n次方, 算法参考jdk hashmap的构造函数规整化容量。
+        // 原理: 利用最高位的1 把所有低位都设置成1，就变成类似 0011 1111，然后 +1 = 0100 0000，即2的n次方
         if (!isTiny(reqCapacity)) { // >= 512
             // Doubled
 
@@ -349,10 +361,14 @@ abstract class PoolArena<T> implements PoolArenaMetric {
         }
 
         // Quantum-spaced
+        // tidy 区域都是16byte的倍数，所以这里判断若 与上 16-1=15=1111 为0，则证明低四位都是0，即为16的倍数，则符合 tidy区域以16byte划分的等差数列规则。
         if ((reqCapacity & 15) == 0) {
             return reqCapacity;
         }
 
+        // 若reqCapacity 不是16字节的倍数，则向上对齐到16字节，即
+        // 1. 先把 reqCapacity 低4为置0
+        // 2. 然后加上16，即低4为置1,即变成16的倍数了，符合tidy区域的规则了
         return (reqCapacity & ~15) + 16;
     }
 
