@@ -52,14 +52,16 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
         this.memoryMapIdx = memoryMapIdx;
         this.runOffset = runOffset;
         this.pageSize = pageSize;
+        // bitmap 标识8kb均分好的 每一份是否被使用了
         bitmap = new long[pageSize >>> 10]; // pageSize / 16 / 64
-        init(head, elemSize);
+        init(head, elemSize); // 对8kb的page进行等份切割
     }
 
     void init(PoolSubpage<T> head, int elemSize) {
         doNotDestroy = true;
         this.elemSize = elemSize;
         if (elemSize != 0) {
+            // 8kb均等切分
             maxNumElems = numAvail = pageSize / elemSize;
             nextAvail = 0;
             bitmapLength = maxNumElems >>> 6;
@@ -71,6 +73,7 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
                 bitmap[i] = 0;
             }
         }
+        // head是伪节点, 此处把this插入 head后面，但是head.next的前面。也属于头插法
         addToPool(head);
     }
 
@@ -195,6 +198,9 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
     }
 
     private long toHandle(int bitmapIdx) {
+        // 二进制组合，用位运算保存多个信息。0x4中的4应该是 标识作用
+        // 如果是一个完整的8kb页，没做内部切分。则没有 4 的标识
+        // 如果是8kb页内部做了等差均分，则有 4 的标识
         return 0x4000000000000000L | (long) bitmapIdx << 32 | memoryMapIdx;
     }
 

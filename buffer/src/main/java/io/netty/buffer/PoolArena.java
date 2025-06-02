@@ -50,6 +50,7 @@ abstract class PoolArena<T> implements PoolArenaMetric {
     private final PoolSubpage<T>[] tinySubpagePools;
     private final PoolSubpage<T>[] smallSubpagePools;
 
+    // PoolChunkList的作用: 管理已经分配了内存的 PoolChunk，且按照PoolChunk的使用率 挂到不同level的链表上
     private final PoolChunkList<T> q050;
     private final PoolChunkList<T> q025;
     private final PoolChunkList<T> q000;
@@ -221,6 +222,7 @@ abstract class PoolArena<T> implements PoolArenaMetric {
              */
             synchronized (head) {
                 final PoolSubpage<T> s = head.next;
+                // 首次分配时不存在subpage，即 head.next = head, 所以需要向内存 申请
                 if (s != head) {
                     assert s.doNotDestroy && s.elemSize == normCapacity;
                     long handle = s.allocate();
@@ -235,6 +237,7 @@ abstract class PoolArena<T> implements PoolArenaMetric {
                     return;
                 }
             }
+            // 此时subpage 还没做等差数组切分，缓存页还没有，则进入 allocateNormal()
             allocateNormal(buf, reqCapacity, normCapacity);
             return;
         }
@@ -251,6 +254,12 @@ abstract class PoolArena<T> implements PoolArenaMetric {
     }
 
     private synchronized void allocateNormal(PooledByteBuf<T> buf, int reqCapacity, int normCapacity) {
+        /**
+         * 为什么是 q050 -> q025 -> q000 -> qInit -> q075 的顺序呢? 答案是 balance.
+         *     q000 使用率最低，则申请成功率最大 (可以快速遍历链表找到可用的PoolChunkList，减少耗时)；但若使用q000，则所有 PoolChunkList 链表整体的 外碎片 越多
+         *     q075 使用率最高，则申请成功率最小 (导致遍历链表时，不停的找能用的PoolChunkList， 增加耗时)；但若使用q075，则所有 PoolChunkList 链表整体的 外碎片 越少
+         * 为了平衡 《整体的外碎片的量》 和 《分配耗时》两个指标，所以从中间  q050 开始找可用的
+         */
         if (q050.allocate(buf, reqCapacity, normCapacity) || q025.allocate(buf, reqCapacity, normCapacity) ||
             q000.allocate(buf, reqCapacity, normCapacity) || qInit.allocate(buf, reqCapacity, normCapacity) ||
             q075.allocate(buf, reqCapacity, normCapacity)) {
