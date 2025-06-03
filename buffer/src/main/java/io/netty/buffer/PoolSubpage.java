@@ -52,7 +52,7 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
         this.memoryMapIdx = memoryMapIdx;
         this.runOffset = runOffset;
         this.pageSize = pageSize;
-        // bitmap 标识8kb均分好的 每一份是否被使用了
+        // bitmap 标识8kb均分好的 每一份是否被使用了。bitmap 为啥用long表示，因为long占8字节(64bit) 是最大的基础字节单位
         bitmap = new long[pageSize >>> 10]; // pageSize / 16 / 64
         init(head, elemSize); // 对8kb的page进行等份切割
     }
@@ -64,7 +64,7 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
             // 8kb均等切分
             maxNumElems = numAvail = pageSize / elemSize;
             nextAvail = 0;
-            bitmapLength = maxNumElems >>> 6;
+            bitmapLength = maxNumElems >>> 6; // 右移6位，即除以64，即查找 bitmap 数组中总共的数组长度是多少
             if ((maxNumElems & 63) != 0) {
                 bitmapLength ++;
             }
