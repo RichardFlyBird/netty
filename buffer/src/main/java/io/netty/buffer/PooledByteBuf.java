@@ -29,6 +29,8 @@ abstract class PooledByteBuf<T> extends AbstractReferenceCountedByteBuf {
     protected PoolChunk<T> chunk;
     protected long handle;
     protected T memory;
+    // slab中等分后的绝对地址(作为PooledByteBuf的起始地址): 等于16MB中choose的8kb的绝对地址 + 8kb中等分后的相对地址
+    // 后续使用 offset + writerIndex/readerIndex 即可得到当前要操作的PooledByteBuf中的绝对地址。
     protected int offset;
     protected int length;
     int maxLength;
