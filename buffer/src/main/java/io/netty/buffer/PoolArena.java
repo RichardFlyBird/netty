@@ -28,6 +28,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.lang.Math.max;
 
+/**
+ * 实体关系图:
+ *      PoolArena：
+ *          包含多个PoolChunk(大小16MB): 这些PoolChunk 按照已经使用的内存，计算出使用率，然后安插到不同的 PoolChunkList中
+ *          包含多个不同使用率的PoolChunkList
+ * @param <T>
+ */
 abstract class PoolArena<T> implements PoolArenaMetric {
     static final boolean HAS_UNSAFE = PlatformDependent.hasUnsafe();
 
