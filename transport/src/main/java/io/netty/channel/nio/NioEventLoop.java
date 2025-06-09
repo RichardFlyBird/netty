@@ -670,6 +670,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
             long currentTimeNanos = System.nanoTime();
             long selectDeadLineNanos = currentTimeNanos + delayNanos(currentTimeNanos);
             for (;;) {
+                // 500000L：预估值。timeoutMillis是用于让Linux select休眠的时间，这里加上 500000L目的是预估从当前代码行执行 到 selector.select(timeoutMillis);中某一行传递到linux系统调用的指令时间。是个预估时间
                 long timeoutMillis = (selectDeadLineNanos - currentTimeNanos + 500000L) / 1000000L;
                 if (timeoutMillis <= 0) {
                     if (selectCnt == 0) {
@@ -689,9 +690,15 @@ public final class NioEventLoop extends SingleThreadEventLoop {
                     break;
                 }
 
+                // 这里为什么要call 带超时时间的select，因为该线程不能直接select()永久阻塞，因为该线程还需要执行三个queue中的任务(可能是用户线程add进去的)。所以这里不能永久阻塞。
+                // 是否有优化首手段：
+                //      1. 这里selector.select()永久阻塞
+                //      2. 三个queue中add任务时，check Boss的eventLoop是否阻塞了。若阻塞，则select.wakeup()唤醒即可
+//                              2.1 select.wakeup()的原理是利用一对linux的pipe管道，向一端发送一个空事件，则linux中阻塞的select操作自然会被唤醒了。
                 int selectedKeys = selector.select(timeoutMillis);
                 selectCnt ++;
 
+                // 遍历下面的几种case，若为true则break，跳出 while(select(timeoutMillis)) 去执行别的事情，如处理3个queue中的task
                 if (selectedKeys != 0 || oldWakenUp || wakenUp.get() || hasTasks() || hasScheduledTasks()) {
                     // - Selected something,
                     // - waken up by user, or
