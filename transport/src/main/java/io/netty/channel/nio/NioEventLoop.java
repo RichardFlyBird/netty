@@ -733,6 +733,9 @@ public final class NioEventLoop extends SingleThreadEventLoop {
                             "Selector.select() returned prematurely {} times in a row; rebuilding Selector {}.",
                             selectCnt, selector);
 
+                    // 这里rebuild的前提是 if(t2 - select.timeout > t1)，证明select没有很快就return了，即没有sleep select.timeout的时间，
+                    // 即: 很有可能是client socket发送了epoll hub事件在linux的epoll对象中，但是jvm和jdk app都没有处理，导致epoll.select()就会一直被唤醒，从不阻塞(linux epoll默认水平触发，即若上层不取出已到达的事件，则该事件一直在epoll readylist中，则会一直触发epoll wait唤醒)
+                    // 所以这里若发现可能是该case，则重新new 一个selector 重新注册fd即可，则之前select上的的事件取消了就行了。之后新的select上也不会残存旧的select上的epoll hub事件。这是万能解决方案
                     rebuildSelector();
                     selector = this.selector;
 
