@@ -186,6 +186,7 @@ abstract class PoolArena<T> implements PoolArenaMetric {
 
     // normCapacity < 512
     static boolean isTiny(int normCapacity) {
+        // 0xFFFFFE00 为512kb的 二进制 减1，取反. 结果: 高位为1，低位为0，之后进行与操作即可判断 是否越界
         return (normCapacity & 0xFFFFFE00) == 0;
     }
 
@@ -373,7 +374,7 @@ abstract class PoolArena<T> implements PoolArenaMetric {
             // Doubled
 
             int normalizedCapacity = reqCapacity;
-            normalizedCapacity --;
+            normalizedCapacity --; // 作用: 防止 normalizedCapacity = 8时，算出来结果是16，其实应该是8。为此只需要减1即可保证是8，不会变成16
             normalizedCapacity |= normalizedCapacity >>>  1;
             normalizedCapacity |= normalizedCapacity >>>  2;
             normalizedCapacity |= normalizedCapacity >>>  4;
@@ -381,7 +382,7 @@ abstract class PoolArena<T> implements PoolArenaMetric {
             normalizedCapacity |= normalizedCapacity >>> 16;
             normalizedCapacity ++;
 
-            if (normalizedCapacity < 0) {
+            if (normalizedCapacity < 0) { // 不会越界，因为上一步有判断: reqCapacity >= chunkSize
                 normalizedCapacity >>>= 1;
             }
 
