@@ -57,6 +57,7 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
 
     private final class NioMessageUnsafe extends AbstractNioUnsafe {
 
+        // 存储clientSocket
         private final List<Object> readBuf = new ArrayList<Object>();
 
         @Override
@@ -72,6 +73,7 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
             try {
                 try {
                     do {
+                        // 1. 先从nioServerSocket中读取一个 clientSocket出来
                         int localRead = doReadMessages(readBuf);
                         if (localRead == 0) {
                             break;
@@ -82,7 +84,7 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
                         }
 
                         allocHandle.incMessagesRead(localRead);
-                    } while (allocHandle.continueReading());
+                    } while (allocHandle.continueReading()); // 2. 根据allocHandle 计数器判断是否需要继续读取。计数器存在的意义在于：防止有成千上万个clientSocket到达，导致这里一直在读取，从而workerGroup处于空闲状态。因此这里先读取一部分给到workerGroup，大家都工作起来
                 } catch (Throwable t) {
                     exception = t;
                 }
