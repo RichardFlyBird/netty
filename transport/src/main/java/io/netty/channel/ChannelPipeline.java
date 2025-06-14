@@ -56,7 +56,7 @@ import java.util.NoSuchElementException;
  *  |                           ChannelPipeline         |               |
  *  |                                                  \|/              |
  *  |    +---------------------+            +-----------+----------+    |
- *  |    | Inbound Handler  N  |            | Outbound Handler  1  |    |
+ *  |    | Inbound Handler a N  |            | Outbound Handler  1  |    |
  *  |    +----------+----------+            +-----------+----------+    |
  *  |              /|\                                  |               |
  *  |               |                                  \|/              |

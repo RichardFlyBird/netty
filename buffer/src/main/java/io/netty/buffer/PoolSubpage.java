@@ -53,8 +53,14 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
         this.runOffset = runOffset;
         this.pageSize = pageSize;
         // bitmap 标识8kb均分好的 每一份是否被使用了。bitmap 为啥用long表示，因为long占8字节(64bit) 是最大的基础字节单位
+        // 为什么pageSize >>> 10，其实计算bitmap length的逻辑很简单: 8kb / 16byte(最小切分单位) / 64bit = 8kb >>> 10
         bitmap = new long[pageSize >>> 10]; // pageSize / 16 / 64
-        init(head, elemSize); // 对8kb的page进行等份切割
+        // 对8kb的page按照每份为elemSize的大小 进行等份切割
+        // elemSize的尺寸大小枚举是有限的:
+        //      tidy: [16byte, 32byte, ... 496byte]
+        //      small: [512byte, 1024byte, 2048byte, 4096byte]
+        // tips: 大于 4096byte的只有 8192byte，即8kb，即属于normal了，直接拿出8kb无需切割了。
+        init(head, elemSize);
     }
 
     void init(PoolSubpage<T> head, int elemSize) {
@@ -90,9 +96,10 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
         }
 
         final int bitmapIdx = getNextAvail();
-        int q = bitmapIdx >>> 6;
-        int r = bitmapIdx & 63;
+        int q = bitmapIdx >>> 6; // bitmap数组中的第几个long
+        int r = bitmapIdx & 63; //q中的第几个bit
         assert (bitmap[q] >>> r & 1) == 0;
+        // 当前 bitmap[q]的值 或操作 当前bitmap[q]所在的long的第r位置为1（其他位为0）= 设置第几q个long的第r位为1
         bitmap[q] |= 1L << r;
 
         if (-- numAvail == 0) {
@@ -172,6 +179,8 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
         final int bitmapLength = this.bitmapLength;
         for (int i = 0; i < bitmapLength; i ++) {
             long bits = bitmap[i];
+            // 只要8位的bits中有一位为0（即没被占用），则~bits就有1的位置，就不为0
+            // 即该if判断是否当前long中是否有空闲bit
             if (~bits != 0) {
                 return findNextAvail0(i, bits);
             }
@@ -201,6 +210,7 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
         // 二进制组合，用位运算保存多个信息。0x4中的4应该是 标识作用
         // 如果是一个完整的8kb页，没做内部切分。则没有 4 的标识
         // 如果是8kb页内部做了等差均分，则有 4 的标识
+        // tip: bitmapIdx最大值评估: 当粒度=16byte时，8kb有512个index，即bitmapIdx最大=512，
         return 0x4000000000000000L | (long) bitmapIdx << 32 | memoryMapIdx;
     }
 

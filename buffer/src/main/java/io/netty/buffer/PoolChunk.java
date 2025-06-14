@@ -235,7 +235,7 @@ final class PoolChunk<T> implements PoolChunkMetric {
             int parentId = id >>> 1;
             byte val1 = value(id); //左节点
             byte val2 = value(id ^ 1); // 无进位加法，即 右节点
-            byte val = val1 < val2 ? val1 : val2;
+            byte val = val1 < val2 ? val1 : val2; // 比较左、右俩节点，取小不取大，表示 parentId这个分支还有可用内存
             setValue(parentId, val);
             id = parentId;
         }
@@ -282,12 +282,18 @@ final class PoolChunk<T> implements PoolChunkMetric {
         if (val > d) { // unusable
             return -1;
         }
+        /**
+         * 1. val < d: 找一个可用的入口节点(叶子节点 or 非叶子节点)
+         * 2. id & initial:
+         */
         while (val < d || (id & initial) == 0) { // id & initial == 1 << d for all ids at depth d, for < d it is 0
             // 寻找叶子结点，因为叶子结点才是 真正代表8kb内存是否被使用了。而非叶子节点只是作为 叶子结点的元数据: 表示叶子节点是否全部被占用了，是否还有剩余的等等信息。
             // 所以最终allocateNode方法返回的id一定是叶子节点的index，即范围: [2048, 4096), 即二进制表示的第12位一定位1
             id <<= 1;
             val = value(id);
             if (val > d) {
+                // 异或运算，表示无进位加法，即，左节点(叶子结点 or 非叶子节点) 的标识已经超出整个16MB数的最大标识 d=11，
+                // 则左子树，彻底无法申请内存了。则转换到同level的相邻的右节点，去看看
                 id ^= 1;
                 val = value(id);
             }
@@ -295,7 +301,9 @@ final class PoolChunk<T> implements PoolChunkMetric {
         byte value = value(id);
         assert value == d && (id & initial) == 1 << d : String.format("val = %d, id & initial = %d, d = %d",
                 value, id & initial, d);
+        // 1. 此时id范围一定位: [2048, 4096)，即设置8kb的叶子结点已经被占用了
         setValue(id, unusable); // mark as unusable
+        // 2. 此处设置 id的所有父节点...父节点的可用值
         updateParentsAlloc(id);
         return id;
     }
@@ -341,6 +349,8 @@ final class PoolChunk<T> implements PoolChunkMetric {
 
             // allocateNode方法返回的id一定是叶子节点的index，即范围: [2048, 4096), 即二进制表示的第12位一定位1
             // 所以 可以使用异或运算免除id的: 第12位的1，得到id: 低11位的数据。等价于jdk hashmap中 一个index 与操作 2的n次方减1得到低位值一样
+            // tip：id是在8kb page在（叶子结点 + 非叶子结点）中的index
+            //      这里subpageIdx(id) 是算出在 非叶子结点中的index。即subpageIdx - id =2048 (1个空节点 + 2047个非叶子节点)
             int subpageIdx = subpageIdx(id);
             PoolSubpage<T> subpage = subpages[subpageIdx];
             if (subpage == null) {
@@ -386,7 +396,6 @@ final class PoolChunk<T> implements PoolChunkMetric {
     void initBuf(PooledByteBuf<T> buf, long handle, int reqCapacity) {
         int memoryMapIdx = memoryMapIdx(handle);
         int bitmapIdx = bitmapIdx(handle);
-        // JPF todo ?????
         if (bitmapIdx == 0) {
             // 代表没有切分的 8kb page，即bitmap不存在
             byte val = value(memoryMapIdx);
@@ -448,7 +457,10 @@ final class PoolChunk<T> implements PoolChunkMetric {
 
     private int subpageIdx(int memoryMapIdx) {
         // 理解方式一: 无进位加法。
-        // 理解方式二: 或者可以这么理解，memoryMapIdx的最大可能的值是大于  maxSubpageAllocs(2048)的，相当于
+        // 理解方式二: 或者可以这么理解
+        //      1. 入参memoryMapIdx 一定属于[2048, 4096)，高位为1；
+        //      2. maxSubpageAllocs=2048,高位也为1，低位全0的，
+        //      异或运算后，则高位全互相一致，则异或为0；低位xxx ^ 000=xxx。即整个操作相当于保留低位。
         return memoryMapIdx ^ maxSubpageAllocs; // remove highest set bit, to get offset
     }
 

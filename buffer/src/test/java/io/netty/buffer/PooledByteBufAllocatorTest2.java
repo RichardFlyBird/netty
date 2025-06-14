@@ -42,6 +42,12 @@ public class PooledByteBufAllocatorTest2 {
          *     1. DEFAULT 内存池 是如何创建的 (内存池可以是 direct，也可以是heap的)
          *     2. 如何从上一步的内存池中 申请一小段区域 来使用。
          */
+//        int initial = - (1 << 2);
+//        System.out.println(initial);
+
+        System.out.println(Integer.toBinaryString(512));
+        System.out.println(512 >>> 6);
+        System.out.println(512 / 64);
         ByteBuf buf = PooledByteBufAllocator.DEFAULT.buffer();
     }
 
