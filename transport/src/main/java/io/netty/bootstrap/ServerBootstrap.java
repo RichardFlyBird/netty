@@ -175,8 +175,10 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
          * Tip: 该Pipeline是 serverSocketChannel 的pipeline，所以里面的回调函数都是对 serverSocketChannel 的操作
          */
         p.addLast(new ChannelInitializer<Channel>() {
+            // ChannelInitializer 的作用，作为一个handler，然后用于添加其他的handlers，然后移除自身这个ChannelInitializer。卸磨杀驴
             @Override
             // 这里的 initChannel 是对之前创建的 NIOServerSocketChannel 进行初始化，initChannel(ch) 中ch是 NIOServerSocketChannel
+            // 1. initChannel()方法起源是 bossGroup中的唯一线程执行register0()任务时，当注册完接受请求的事件到selector之后，触发fire事件，然后执行initChannel()方法
             public void initChannel(Channel ch) throws Exception {
                 final ChannelPipeline pipeline = ch.pipeline(); // ch 为socketChannel
                 ChannelHandler handler = config.handler();
@@ -188,6 +190,10 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
                 // In this case the initChannel(...) method will only be called after this method returns. Because
                 // of this we need to ensure we add our handler in a delayed fashion so all the users handler are
                 // placed in front of the ServerBootstrapAcceptor.
+                // 2. 代码执行到这里的时候，ch.eventLoop() 这个executor执行器已经start，但是当时正在执行runnable任务，必须等待这个runable任务执行完成之后，
+                //    再从bossGroup的task队列中取出：添加ServerBootstrapAcceptor到pipeline的task执行
+                //    所以这里一定是 上一步的config.handler()都被添加到pipeline中之后，才会把ServerBootstrapAcceptor这个handler放到pipeline中
+                //  结论：保证ServerBootstrapAcceptor是pipeline中除了tail外的的最后一个handler，即user在config.handler()中自定义的handler都放前面，保证顺序，
                 ch.eventLoop().execute(new Runnable() {
                     @Override
                     public void run() {
