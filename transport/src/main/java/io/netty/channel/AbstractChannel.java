@@ -493,6 +493,8 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             }
         }
 
+        // register0 一定是eventLoop线程亲自执行的，不可能是main线程执行。
+        // register0 有可能是bossGroup中的线程执行注册accept事件；也有可能是workGroup中的线程注册read/write事件
         private void register0(ChannelPromise promise) {
             try {
                 // check if the channel is still open as it could be closed in the mean time when the register
