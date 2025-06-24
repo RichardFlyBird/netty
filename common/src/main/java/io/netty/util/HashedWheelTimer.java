@@ -456,6 +456,7 @@ public class HashedWheelTimer implements Timer {
 
             for (;;) {
                 final long currentTime = System.nanoTime() - startTime;
+                // 加上999999目的: 四舍五入，宁愿多不远少
                 long sleepTimeMs = (deadline - currentTime + 999999) / 1000000;
 
                 if (sleepTimeMs <= 0) {
