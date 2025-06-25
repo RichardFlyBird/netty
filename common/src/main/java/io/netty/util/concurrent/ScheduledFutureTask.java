@@ -31,6 +31,8 @@ final class ScheduledFutureTask<V> extends PromiseTask<V> implements ScheduledFu
         return System.nanoTime() - START_TIME;
     }
 
+    // 相对于START_TIME的一个时间间隔，为什么这么设计？因为只有存在参考系，才能在后来判断是否由于线程中途去执行其他事情导致 该ScheduledFutureTask delay的时间到了
+    // 这里START_TIME是Netty服务的启动时间，其实任何时间都可以，只要有参考系即可，也可以设置成 1979年xxxx
     static long deadlineNanos(long delay) {
         return nanoTime() + delay;
     }
@@ -82,6 +84,9 @@ final class ScheduledFutureTask<V> extends PromiseTask<V> implements ScheduledFu
     }
 
     public long delayNanos(long currentTimeNanos) {
+        // 有可能线程中途执行其他耗时的事情，导致ip寄存器指向当前指令时，已经超过delay的时间了，因此这里使用Math.max()保证返回的剩余事件一定是 >=0的
+        //      1. 然后后续可以判断若 == 0，则说明delay的时间到了，可以直接执行该ScheduledFutureTask
+        //      2. 若>0，则扔需要等待一定的时间
         return Math.max(0, deadlineNanos() - (currentTimeNanos - START_TIME));
     }
 
