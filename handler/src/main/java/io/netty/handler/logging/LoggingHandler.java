@@ -140,7 +140,7 @@ public class LoggingHandler extends ChannelDuplexHandler {
         if (logger.isEnabled(internalLevel)) {
             logger.log(internalLevel, format(ctx, "REGISTERED"));
         }
-        ctx.fireChannelRegistered();
+        ctx.fireChannelRegistered(); // 每一个handler在上面执行业务代码，最后再次fire对应的事件方法，一次来触发下一个inBoundHandler or outBoundHandler
     }
 
     @Override

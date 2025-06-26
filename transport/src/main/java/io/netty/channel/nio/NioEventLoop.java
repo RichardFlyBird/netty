@@ -341,6 +341,12 @@ public final class NioEventLoop extends SingleThreadEventLoop {
         logger.info("Migrated " + nChannels + " channel(s) to the new Selector.");
     }
 
+    /**
+     * NioEventLoop类是Boos 和Worker公用的，所以Boos 和Worker都会死循环执行下面的run方法。
+     *     1. Boos 和 worker中都有selector，都是先处理selector中的事件，然后处理三个队列中的任务:
+     *          a. Boss中的selector 是处理accept事件
+     *          b. Worker中的selector 是处理read/write事件
+     */
     @Override
     protected void run() {
         for (;;) {
@@ -389,6 +395,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
                 cancelledKeys = 0;
                 needsToSelectAgain = false;
                 final int ioRatio = this.ioRatio;
+                // ioRatio: 表示select(IO) 与 是哪个队列的处理时间占比
                 if (ioRatio == 100) {
                     processSelectedKeys();
                     runAllTasks();
