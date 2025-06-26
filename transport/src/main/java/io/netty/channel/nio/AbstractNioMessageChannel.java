@@ -64,7 +64,9 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
         public void read() {
             assert eventLoop().inEventLoop();
             final ChannelConfig config = config();
+            // pipeline指的是server的pipeline
             final ChannelPipeline pipeline = pipeline();
+            // allocHandle 用于限制从serverSocketChannel中连续读取出的socketChannel个数，即得到的客户端连接数
             final RecvByteBufAllocator.Handle allocHandle = unsafe().recvBufAllocHandle();
             allocHandle.reset(config);
 
@@ -92,9 +94,11 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
                 int size = readBuf.size();
                 for (int i = 0; i < size; i ++) {
                     readPending = false;
+                    // 1. server每读取到一个客户端socket，就执行一次: pipeline.fireChannelRead
                     pipeline.fireChannelRead(readBuf.get(i));
                 }
                 readBuf.clear();
+                // 2. server读取完所有的客户端socket之后，最后执行一次: pipeline.fireChannelReadComplete
                 allocHandle.readComplete();
                 pipeline.fireChannelReadComplete();
 

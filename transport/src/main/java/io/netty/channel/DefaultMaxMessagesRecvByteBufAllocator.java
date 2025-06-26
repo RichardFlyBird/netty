@@ -75,6 +75,7 @@ public abstract class DefaultMaxMessagesRecvByteBufAllocator implements MaxMessa
 
         @Override
         public final void incMessagesRead(int amt) {
+            // 读了多少个，这里的单位对于serverSocketChannel而言读取的就是accept出来的客户端channel: socketChannel
             totalMessages += amt;
         }
 
@@ -98,7 +99,7 @@ public abstract class DefaultMaxMessagesRecvByteBufAllocator implements MaxMessa
         public boolean continueReading() {
             return config.isAutoRead() &&
                    attemptedBytesRead == lastBytesRead &&
-                   totalMessages < maxMessagePerRead &&
+                   totalMessages < maxMessagePerRead && // 判断是否读取的个数达到可 设定的最大值
                    totalBytesRead < Integer.MAX_VALUE;
         }
 
