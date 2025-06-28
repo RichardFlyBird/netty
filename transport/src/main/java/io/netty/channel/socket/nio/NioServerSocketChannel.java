@@ -183,6 +183,9 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
 
     @Override
     protected final Object filterOutboundMessage(Object msg) throws Exception {
+        // serverSocketChannel 只能利用accept方法读取 三次握手成功的client socket。
+        //    1. 这里的accept抽象一层来说就是read操作。
+        //    2. 只能accept，也就是读操作，没有任务write操作。
         throw new UnsupportedOperationException();
     }
 

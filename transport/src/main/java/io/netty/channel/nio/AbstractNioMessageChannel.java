@@ -95,6 +95,7 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
                 for (int i = 0; i < size; i ++) {
                     readPending = false;
                     // 1. server每读取到一个客户端socket，就执行一次: pipeline.fireChannelRead
+                    //    【这一步是衔接Boss余Work的关键, 关键是ServerBootstrapAcceptor】然后调用serverSocketChannel的pipeline，通过inBoundHandler把得到的客户端channel 注册到work group中
                     pipeline.fireChannelRead(readBuf.get(i));
                 }
                 readBuf.clear();

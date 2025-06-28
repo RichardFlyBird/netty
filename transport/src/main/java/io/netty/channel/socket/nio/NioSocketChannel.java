@@ -383,6 +383,8 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
                     return;
                 case 1:
                     // Only one ByteBuf so use non-gathering write
+                    // 只有一个ByteBuf，则使用 non-gathering (非聚合写)
+                    // tips: 直接写内核ch.write()，若写失败，则说明当前内核中socket的写缓冲区满了，无法写入，则注册写事件到selector上。等待selector收到可写的事件之后，再写入内核。
                     ByteBuffer nioBuffer = nioBuffers[0];
                     for (int i = config().getWriteSpinCount() - 1; i >= 0; i --) {
                         final int localWrittenBytes = ch.write(nioBuffer);
@@ -399,6 +401,7 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
                     }
                     break;
                 default:
+                    // 有多个ByteBuf，则使用 gathering (聚合写)
                     for (int i = config().getWriteSpinCount() - 1; i >= 0; i --) {
                         final long localWrittenBytes = ch.write(nioBuffers, 0, nioBufferCnt);
                         if (localWrittenBytes == 0) {
@@ -420,6 +423,8 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
 
             if (!done) {
                 // Did not write all buffers completely.
+                // 《Care importantly》
+                //      根据setOpWrite参数来设置是否需要 设置OP_Write感兴趣事件集。如果之前ch.write()由于内核socket的写缓冲区满了，导致数据没从netty缓冲区 -> 写完到内核缓冲区，则此时重新注册OpWrite事件，等着写缓冲区有余缝了再写。
                 incompleteWrite(setOpWrite);
                 break;
             }

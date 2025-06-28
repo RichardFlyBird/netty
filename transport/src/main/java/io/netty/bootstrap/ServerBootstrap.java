@@ -247,8 +247,11 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
         @Override
         @SuppressWarnings("unchecked")
         public void channelRead(ChannelHandlerContext ctx, Object msg) {
+            // 1. 这里的msg是 clientSocket。即通过serverSocketChannel.accept()得到的客户端连接
+            // 然后把客户端连接注册到 work的 nioEventLoop中
             final Channel child = (Channel) msg;
 
+            // 这里的childHandler即: HttpHelloWorldServerInitializer
             child.pipeline().addLast(childHandler);
 
             for (Entry<ChannelOption<?>, Object> e: childOptions) {
@@ -266,6 +269,7 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
             }
 
             try {
+                // 2. 注册客户端连接 work的 nioEventLoop中的selector中
                 childGroup.register(child).addListener(new ChannelFutureListener() {
                     @Override
                     public void operationComplete(ChannelFuture future) throws Exception {

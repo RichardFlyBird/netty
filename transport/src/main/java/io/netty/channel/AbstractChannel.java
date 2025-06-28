@@ -795,10 +795,13 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             }
         }
 
+        // 仅写入Netty自己的应用层缓冲区中。
         @Override
         public final void write(Object msg, ChannelPromise promise) {
             assertEventLoop();
 
+            // 写到Netty自己的应用层缓冲区中。
+            // 而writeAndFlush()才会把Netty自己的应用层缓冲区的数据 -> 写入到内核的sk_buf中 -> 然后由内核决定什么时候真正的写出到网卡
             ChannelOutboundBuffer outboundBuffer = this.outboundBuffer;
             if (outboundBuffer == null) {
                 // If the outboundBuffer is null we know the channel was closed and so

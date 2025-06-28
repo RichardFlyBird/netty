@@ -1008,7 +1008,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
 
     @Override
     public final ChannelPipeline read() {
-        tail.read();
+        tail.read(); // 由tail (inboundHandler)来触发所有的 outBoundHandler的执行链路，从tail -> xxx -> head
         return this;
     }
 
@@ -1331,17 +1331,22 @@ public class DefaultChannelPipeline implements ChannelPipeline {
 
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+            // HeadContext的channelRead()方法啥也没干，直接传递到下一个handler中
             ctx.fireChannelRead(msg);
         }
 
         @Override
         public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
+            // 1. fireChannelReadComplete 会导致serverSocketChannel的pipeline 从 headContext -> xxx -> tailContext 走完一遍 inboundHandler
             ctx.fireChannelReadComplete();
 
+            // 2. 然后触发从tail -> xxx -> headContext倒着走一遍outboundHandler方法
+            //     2.1 最终起作用的是headContext，目的是把真正的感兴趣事件集绑定 到selectionKey中
             readIfIsAutoRead();
         }
 
         private void readIfIsAutoRead() {
+            // isAutoRead默认是true，因此channel.read(); 会
             if (channel.config().isAutoRead()) {
                 channel.read();
             }

@@ -575,6 +575,9 @@ public final class NioEventLoop extends SingleThreadEventLoop {
             // Also check for readOps of 0 to workaround possible JDK bug which may otherwise lead
             // to a spin loop
             if ((readyOps & (SelectionKey.OP_READ | SelectionKey.OP_ACCEPT)) != 0 || readyOps == 0) {
+                // 1. 对于serverSocketChannel 而言，从accept()中读取到客户端channel
+                //      1.1 【这一步是衔接Boss余Work的关键】然后调用serverSocketChannel的pipeline，通过inBoundHandler把得到的客户端channel 注册到work group中
+                // 2. 对于socketChannel而言，从客户端channel中读取真正的tcp连接发来的真实数据
                 unsafe.read();
                 if (!ch.isOpen()) {
                     // Connection already closed - no need to handle write.

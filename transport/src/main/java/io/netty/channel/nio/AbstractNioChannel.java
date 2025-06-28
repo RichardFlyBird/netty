@@ -407,6 +407,9 @@ public abstract class AbstractNioChannel extends AbstractChannel {
                  *            SOCK_STREAM：面向连接的字节流（默认对应 TCP）。
                  *            SOCK_DGRAM：无连接的数据报（默认对应 UDP）。
                  */
+
+                // 这里感兴趣事件集为0，即代表没有感兴趣事件集，其目的是doRegister()这个方法代码复用：
+                //     无论服务端channel，还是客户端channel都可以调用该方法初始化channel，但是真正的感兴趣事件集的设置防在 clientChannel/serverChannel各自的具体实现中。
                 selectionKey = javaChannel().register(eventLoop().selector, 0, this);
                 return;
             } catch (CancelledKeyException e) {

@@ -943,6 +943,7 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
         return true;
     }
 
+    // inbound handler的执行顺序: head -> xxx -> tail.
     private AbstractChannelHandlerContext findContextInbound() {
         AbstractChannelHandlerContext ctx = this;
         do {
@@ -951,6 +952,7 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
         return ctx;
     }
 
+    // 对于outBound，则从后往前找 ctx，即从tail -> xxx -> head 逐个执行。正好与inBound handler的顺序相反。
     private AbstractChannelHandlerContext findContextOutbound() {
         AbstractChannelHandlerContext ctx = this;
         do {
