@@ -53,6 +53,10 @@ public class HttpHelloWorldServerHandler extends ChannelInboundHandlerAdapter {
             response.headers().set(CONTENT_TYPE, "text/plain");
             response.headers().setInt(CONTENT_LENGTH, response.content().readableBytes());
 
+            // 在这里触发 ctx.write
+            //    1. 然后先写入netty自定义的IO缓冲区
+            //    2. 再写入内核的socket；若OS的socket的写缓冲区满了，无法写入，则直接注册OP_WRITE事件到客户端channel的selector上，等着下次可写的时候再写
+            //    3. 最后由内核决定啥时候把 socket的数据真正的写入到 网卡 (暂不研究内核的读写操作，但大概与File的读写类似)
             if (!keepAlive) {
                 ctx.write(response).addListener(ChannelFutureListener.CLOSE);
             } else {

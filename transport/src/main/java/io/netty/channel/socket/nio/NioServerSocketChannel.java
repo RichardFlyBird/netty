@@ -138,6 +138,7 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
 
         try {
             if (ch != null) {
+                // NioSocketChannel 构造函数中为 op_read事件。
                 buf.add(new NioSocketChannel(this, ch));
                 return 1;
             }

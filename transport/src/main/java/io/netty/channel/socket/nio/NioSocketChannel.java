@@ -423,7 +423,7 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
 
             if (!done) {
                 // Did not write all buffers completely.
-                // 《Care importantly》
+                // 《Care importantly!!!》
                 //      根据setOpWrite参数来设置是否需要 设置OP_Write感兴趣事件集。如果之前ch.write()由于内核socket的写缓冲区满了，导致数据没从netty缓冲区 -> 写完到内核缓冲区，则此时重新注册OpWrite事件，等着写缓冲区有余缝了再写。
                 incompleteWrite(setOpWrite);
                 break;
