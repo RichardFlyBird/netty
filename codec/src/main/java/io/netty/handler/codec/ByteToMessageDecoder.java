@@ -264,6 +264,7 @@ public abstract class ByteToMessageDecoder extends ChannelInboundHandlerAdapter 
 
                 int size = out.size();
                 decodeWasNull = !out.insertSinceRecycled();
+                // 这里传入out.size()，那么相当于decode了size个 完整的请求体，则内部需要对每个完整的请求体 都执行ctx.fireChannelRead()
                 fireChannelRead(ctx, out, size);
                 out.recycle();
             }
@@ -393,6 +394,7 @@ public abstract class ByteToMessageDecoder extends ChannelInboundHandlerAdapter 
     // out: 代表解码后的数据，若in是完整的数据，则会进行decode，然后把decode结果放到out数组中；若in不完整，则不解码，且不放到out数组中
     protected void callDecode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
         try {
+            // while 循环：有可能上次客户端发来的数据不完整，此时不做decode；第二次发来了很多批完整的请求数据，此时做n次decode
             while (in.isReadable()) {
                 int outSize = out.size();
 
