@@ -574,6 +574,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
             int readyOps = k.readyOps();
             // Also check for readOps of 0 to workaround possible JDK bug which may otherwise lead
             // to a spin loop
+            // 1. 处理读 或者 接受请求事件
             if ((readyOps & (SelectionKey.OP_READ | SelectionKey.OP_ACCEPT)) != 0 || readyOps == 0) {
                 // 1. 对于serverSocketChannel 而言，从accept()中读取到客户端channel
                 //      1.1 【这一步是衔接Boss余Work的关键】然后调用serverSocketChannel的pipeline，通过inBoundHandler把得到的客户端channel 注册到work group中
@@ -590,6 +591,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
             //          2. 然后flush到OS的缓冲区中
             //              2.1 当OS的 写缓冲区 未满，则直接可以写入内核sk_buf,
             //              2.2 当OS的 写缓冲区 满了，则此时无法写出到内核sk_buf；则注册OP_WRITE事件，等着selector发现有可写的事件到达时，再进行写操作。
+            // 2. 处理写事件
             if ((readyOps & SelectionKey.OP_WRITE) != 0) {
                 // Call forceFlush which will also take care of clear the OP_WRITE once there is nothing left to write
                 // 写Flow:
@@ -597,6 +599,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
                 //    2. 如果发现写不进去(即OS socket的缓冲区满了)，则再注册OP_wRITE事件，等着socket缓冲区可写的时候再写
                 ch.unsafe().forceFlush();
             }
+            // 3. todo 待研究, 应该属于客户端行为
             if ((readyOps & SelectionKey.OP_CONNECT) != 0) {
                 // remove OP_CONNECT as otherwise Selector.select(..) will always return without blocking
                 // See https://github.com/netty/netty/issues/924
