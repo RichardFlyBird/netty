@@ -124,8 +124,8 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
                         close = allocHandle.lastBytesRead() < 0;
                         break;
                     }
-
-                    allocHandle.incMessagesRead(1);
+                    // 读取一次，计数加1，而不是字节数。
+                    allocHandle.incMessagesRead(1); // 从linux的接收缓冲区中：读取出攒的一批流式数据，有可能是客户端在多个应用层发送的多次请求，所以这里读出来的数据 有可能存在粘包问题
                     readPending = false;
                     pipeline.fireChannelRead(byteBuf);
                     byteBuf = null;

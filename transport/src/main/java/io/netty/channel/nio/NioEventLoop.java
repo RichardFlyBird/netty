@@ -586,7 +586,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
                 }
             }
             // todo 研究下何时塞入的OP_WRITE感兴趣事件？？？？？
-            // 明白了：第一次向客户端socketChannel写数据时，是不经过 OP_WRITE事件的，而是由用于在 自定义处理的outBoundHandler中触发ctx.write():
+            // 明白了：第一次向客户端socketChannel写数据时，是不经过 OP_WRITE事件的，而是由用于在 自定义处理的outBoundHandler中触发ctx.write(), 如':
             //          1. 然后数据写入netty的用户态缓冲区中
             //          2. 然后flush到OS的缓冲区中
             //              2.1 当OS的 写缓冲区 未满，则直接可以写入内核sk_buf,
