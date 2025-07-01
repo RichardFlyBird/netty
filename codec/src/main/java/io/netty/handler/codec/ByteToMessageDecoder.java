@@ -387,6 +387,10 @@ public abstract class ByteToMessageDecoder extends ChannelInboundHandlerAdapter 
      * @param in            the {@link ByteBuf} from which to read data
      * @param out           the {@link List} to which decoded messages should be added
      */
+    // in: 代表从linux socket的接收缓冲区读取到的数据（有可能是完整的客户端请求数据，也有可能是不完整的字节流） -> 暂存到ByteBuf in中；
+    //     1. 等待请求的数据完整了之后再进行decode，往下传
+    //     2. 否则一直在ByteBuf in中暂存
+    // out: 代表解码后的数据，若in是完整的数据，则会进行decode，然后把decode结果放到out数组中；若in不完整，则不解码，且不放到out数组中
     protected void callDecode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
         try {
             while (in.isReadable()) {
@@ -418,7 +422,10 @@ public abstract class ByteToMessageDecoder extends ChannelInboundHandlerAdapter 
                     break;
                 }
 
+                // 1. outSize == out.size(): 代表out长度没变化，即没有向out中放入数据
                 if (outSize == out.size()) {
+                    // 2. oldInputLength == in.readableBytes(): 代表in的长度没发生变化，代表没有从in中读数据
+                    // 综合1 & 2就是：当前即没有解码，也没有往out中放数据
                     if (oldInputLength == in.readableBytes()) {
                         break;
                     } else {
@@ -426,6 +433,8 @@ public abstract class ByteToMessageDecoder extends ChannelInboundHandlerAdapter 
                     }
                 }
 
+                // 走到这一步代表：outSize != out.size()，若此时oldInputLength == in.readableBytes()，则算是bug：
+                //     因为out发生变化，说明上面一定发生了解码 + 往out中放入解码后的数据了；但是此时这里的oldInputLength == in.readableBytes() 代表没有解码--------形成悖论，所以这里抛出bug异常
                 if (oldInputLength == in.readableBytes()) {
                     throw new DecoderException(
                             StringUtil.simpleClassName(getClass()) +
