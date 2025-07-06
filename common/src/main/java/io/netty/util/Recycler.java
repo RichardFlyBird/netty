@@ -121,6 +121,8 @@ public abstract class Recycler<T> {
         if (maxCapacity == 0) {
             return newObject((Handle<T>) NOOP_HANDLE);
         }
+        // stack 是属于threadLocal的，且stack.pop() 方法只在threadLocal.get();后面调用：
+        //      则代表stack.pop()方法只有单线程调用，即便pop方法线程安全
         Stack<T> stack = threadLocal.get();
         DefaultHandle<T> handle = stack.pop();
         if (handle == null) {
@@ -166,8 +168,8 @@ public abstract class Recycler<T> {
         private int lastRecycledId;
         private int recycleId;
 
-        private Stack<?> stack;
-        private Object value;
+        private Stack<?> stack; // 属于哪个stack
+        private Object value; // 真正的缓存的对象是啥
 
         DefaultHandle(Stack<?> stack) {
             this.stack = stack;
@@ -178,6 +180,7 @@ public abstract class Recycler<T> {
             if (object != value) {
                 throw new IllegalArgumentException("object does not belong to handle");
             }
+            // 1. stack 是线程1创建的：线程1拿，用完之后归还
             Thread thread = Thread.currentThread();
             if (thread == stack.thread) {
                 stack.push(this);
@@ -186,6 +189,8 @@ public abstract class Recycler<T> {
             // we don't want to have a ref to the queue as the value in our weak map
             // so we null it out; to ensure there are no races with restoring it later
             // we impose a memory ordering here (no-op on x86)
+            // 2. stack 是线程1创建的：但是线程2拿了用，用完之后归如何归还呢？不直接归还到stack中，因为会涉及到并发操作(stack很大时间是被线程1操作的)。而是归还到 stack后面挂着的WeakOrderQueue中:
+            //          目的是：消除归还对象时引发的并发问题。有并发 -> 无并发
             Map<Stack<?>, WeakOrderQueue> delayedRecycled = DELAYED_RECYCLED.get();
             WeakOrderQueue queue = delayedRecycled.get(stack);
             if (queue == null) {
@@ -196,7 +201,7 @@ public abstract class Recycler<T> {
                 }
                 delayedRecycled.put(stack, queue);
             }
-            queue.add(this);
+            queue.add(this); // 暂时先还回到stack对应的 WeakOrderQueue中
         }
     }
 
@@ -233,8 +238,8 @@ public abstract class Recycler<T> {
             head = tail = new Link();
             owner = new WeakReference<Thread>(thread);
             synchronized (stack) {
-                next = stack.head;
-                stack.head = this;
+                next = stack.head; // 头插法
+                stack.head = this; // stack -> WeakOrderQueue1 -> WeakOrderQueue2 -> xxx
             }
 
             // Its important that we not store the Stack itself in the WeakOrderQueue as the Stack also is used in
@@ -289,6 +294,13 @@ public abstract class Recycler<T> {
             handle.stack = null;
             // we lazy set to ensure that setting stack to null appears before we unnull it in the owning thread;
             // this also means we guarantee visibility of an element in the queue if we see the index updated
+            // lazy使用了putOrderedInt: 含义是在指令"前面" 只加 写屏障，即屏障之前的写操作会被刷出storebuffer，但是屏障后面操作的的数据可能还在CPU的 storebuffer中没有刷出
+            // 即这里只保证lazySet的数据跟 上面的代码的写指令 不会乱序，但是不保证lazySet的数据的可见性。为什么这里不需要保证可见性呢？
+            //      1. 大概率后面有对 volatile int value 变量的写操作，一旦执行写，则会加如下的屏障，由于StoreLoad是全屏障，则会把之前暂存在storebuffer中的数据页刷出去:
+            //               [StoreStore + LoadStore]
+            //                volatile store
+            //               [StoreLoad]
+            // tip: 其实这里lazySet的目的是保证  tail.elements[writeIndex]写入和 lazySet 的index顺序，即发布订阅模型，只要看到index的值变了，则一定可以看到tail.elements[writeIndex]中的最新设置的值。
             tail.lazySet(writeIndex + 1);
         }
 
@@ -388,8 +400,8 @@ public abstract class Recycler<T> {
         private int size;
         final AtomicInteger availableSharedCapacity;
 
-        private volatile WeakOrderQueue head;
-        private WeakOrderQueue cursor, prev;
+        private volatile WeakOrderQueue head; // 初始时head为null
+        private WeakOrderQueue cursor, prev; // 初始时 cursor, prev都为null
 
         Stack(Recycler<T> parent, Thread thread, int maxCapacity, int maxSharedCapacityFactor) {
             this.parent = parent;
@@ -416,8 +428,10 @@ public abstract class Recycler<T> {
 
         @SuppressWarnings({ "unchecked", "rawtypes" })
         DefaultHandle<T> pop() {
-            int size = this.size;
+            int size = this.size; // 初始时size=0，因为threadlocal 中new stack()时，没有初始化size，则默认为0
             if (size == 0) {
+                // scavenge()含义: 拾荒，即从stack后面的挂载的WeakOrderQueue中找一个缓存的obj使用。
+                // Tip: stack链表结构: stack -> WeakOrderQueue_1 -> xxx -> WeakOrderQueue_N
                 if (!scavenge()) {
                     return null;
                 }
@@ -432,6 +446,9 @@ public abstract class Recycler<T> {
             ret.recycleId = 0;
             ret.lastRecycledId = 0;
             this.size = size;
+            // 这里直接从池子中拿出一个对象，可能还残留着上一任使用者的痕迹：即保存了之前上一任使用时的数据。
+            // 所以需要拿到之后抹除痕迹(这一步由用户自己根据需要来做)
+            // tip: 而我觉得可以优化一版：DefaultHandle 中可以直接开放一个接口叫cleanup，由用户自己去实现如何cleanup之前的痕迹
             return ret;
         }
 
@@ -447,9 +464,13 @@ public abstract class Recycler<T> {
             return false;
         }
 
+
         boolean scavengeSome() {
             WeakOrderQueue cursor = this.cursor;
             if (cursor == null) {
+                // java语法访问volatile head变量会自动在jvm的c++中增加读屏障, 即:
+                //      volatile load;
+                //      [LoadLoad + LoadStore]
                 cursor = head;
                 if (cursor == null) {
                     return false;
@@ -459,6 +480,11 @@ public abstract class Recycler<T> {
             boolean success = false;
             WeakOrderQueue prev = this.prev;
             do {
+                /**
+                 * 从WeakOrderQueue中内部的链表中 找一个link出来，然后转移可用对象 到stack中
+                 * 1. 从 stack -> WeakOrderQueue_1 -> xxx -> WeakOrderQueue_N中取出最近的一个WeakOrderQueue，
+                 * 2. 然后从该WeakOrderQueue 的 head -> xxx -> tail 中找到最近的一个link，转移该link中的数组对象到 stack的数组对象中
+                 */
                 if (cursor.transfer(this)) {
                     success = true;
                     break;
