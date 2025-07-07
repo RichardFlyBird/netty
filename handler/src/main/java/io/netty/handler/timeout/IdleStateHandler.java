@@ -374,6 +374,14 @@ public class IdleStateHandler extends ChannelDuplexHandler {
             }
 
             long nextDelay = readerIdleTimeNanos;
+            /**
+             * 如果 reading =true
+             *      代表上一次读了一部分数据，另外一部分数据还没到达，因此没法读取，executor执行完 socket的读写后，就继续执行三个队列了，因此才走到了这里。所以直接放行，重新设置一个schedule task即可
+             * 如果 reading =false
+             *      代表之前读完一次了，直到现在也没有新的数据到达，则计算 nextDelay -= System.nanoTime() - lastReadTime; 看下nextDelay时间若小于0，则代表超过多长时间没有读到数据了，则
+             *          1. 从新设置一个schedule delay task
+             *          2. channelIdle(ctx, event); 触发一个idle事件，交给下一个handler处理
+             */
             if (!reading) {
                 nextDelay -= System.nanoTime() - lastReadTime;
             }
